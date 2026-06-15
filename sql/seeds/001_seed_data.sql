@@ -1,0 +1,8 @@
+-- Seed data reference for local development
+--
+-- Users and tasks are inserted by `npm run seed` (src/db/seed.js) so that
+-- passwords are hashed with bcrypt at seed time rather than stored in plain SQL.
+--
+-- Seeded accounts:
+--   alice@example.com / Password123!
+--   bob@example.com   / Password123!
