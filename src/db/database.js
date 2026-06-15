@@ -32,6 +32,24 @@ function runSqlFile(filePath) {
   getDb().exec(sql);
 }
 
+function runMigrations() {
+  const migrationsDir = path.join(__dirname, '../../sql/migrations');
+  const migrationFiles = fs
+    .readdirSync(migrationsDir)
+    .filter((file) => file.endsWith('.sql'))
+    .sort();
+
+  for (const file of migrationFiles) {
+    runSqlFile(path.join(migrationsDir, file));
+  }
+
+  const db = getDb();
+  const userColumns = db.prepare('PRAGMA table_info(users)').all();
+  if (!userColumns.some((column) => column.name === 'token_version')) {
+    db.exec('ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0');
+  }
+}
+
 function closeDb() {
   if (db) {
     db.close();
@@ -42,5 +60,6 @@ function closeDb() {
 module.exports = {
   getDb,
   runSqlFile,
+  runMigrations,
   closeDb,
 };

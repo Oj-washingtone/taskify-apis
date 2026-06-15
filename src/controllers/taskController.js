@@ -57,6 +57,24 @@ function getTasks(req, res, next) {
   }
 }
 
+function getTask(req, res, next) {
+  try {
+    const { id } = req.params;
+    const db = getDb();
+    const task = db
+      .prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?')
+      .get(id, req.user.id);
+
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    return res.json({ task: formatTask(task) });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 function updateTask(req, res, next) {
   try {
     const { id } = req.params;
@@ -122,6 +140,7 @@ function deleteTask(req, res, next) {
 module.exports = {
   createTask,
   getTasks,
+  getTask,
   updateTask,
   deleteTask,
 };

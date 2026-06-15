@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_url TEXT,
   auth_provider TEXT NOT NULL DEFAULT 'local' CHECK (auth_provider IN ('local', 'google', 'github')),
   provider_id TEXT,
+  token_version INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

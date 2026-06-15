@@ -1,10 +1,7 @@
-const path = require('path');
-const { runSqlFile, closeDb } = require('./database');
-
-const migrationPath = path.join(__dirname, '../../sql/migrations/001_initial_schema.sql');
+const { runMigrations, closeDb } = require('./database');
 
 try {
-  runSqlFile(migrationPath);
+  runMigrations();
   console.log('Migration completed successfully.');
 } catch (error) {
   console.error('Migration failed:', error.message);

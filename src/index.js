@@ -1,12 +1,9 @@
-const path = require('path');
 const app = require('./app');
 const config = require('./config');
-const { runSqlFile } = require('./db/database');
-
-const migrationPath = path.join(__dirname, '../sql/migrations/001_initial_schema.sql');
+const { runMigrations } = require('./db/database');
 
 try {
-  runSqlFile(migrationPath);
+  runMigrations();
 } catch (error) {
   console.error('Failed to run database migration on startup:', error.message);
   process.exit(1);

@@ -22,7 +22,11 @@ function sanitizeUser(user) {
 }
 
 function issueTokens(user) {
-  const accessToken = signAccessToken({ sub: user.id, email: user.email });
+  const accessToken = signAccessToken({
+    sub: user.id,
+    email: user.email,
+    tv: user.token_version ?? 0,
+  });
   const refreshToken = signRefreshToken({ sub: user.id, type: 'refresh' });
 
   const db = getDb();
@@ -184,8 +188,32 @@ async function socialLogin(req, res, next) {
   }
 }
 
+function logout(req, res, next) {
+  try {
+    const db = getDb();
+    const revokedAt = new Date().toISOString();
+
+    db.prepare(`
+      UPDATE refresh_tokens
+      SET revoked_at = ?
+      WHERE user_id = ? AND revoked_at IS NULL
+    `).run(revokedAt, req.user.id);
+
+    db.prepare(`
+      UPDATE users
+      SET token_version = token_version + 1, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(req.user.id);
+
+    return res.json({ message: 'Logged out successfully. All access tokens have been invalidated.' });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   register,
   login,
   socialLogin,
+  logout,
 };

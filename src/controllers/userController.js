@@ -98,7 +98,38 @@ async function updateProfile(req, res, next) {
   }
 }
 
+async function deleteAccount(req, res, next) {
+  try {
+    const db = getDb();
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.auth_provider === 'local') {
+      const { password } = req.body;
+
+      if (!password || typeof password !== 'string') {
+        return res.status(400).json({ error: 'Password is required to delete a local account' });
+      }
+
+      const validPassword = await verifyPassword(password, user.password_hash);
+      if (!validPassword) {
+        return res.status(401).json({ error: 'Password is incorrect' });
+      }
+    }
+
+    db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
+
+    return res.status(204).send();
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   getProfile,
   updateProfile,
+  deleteAccount,
 };

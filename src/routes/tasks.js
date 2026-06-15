@@ -3,6 +3,7 @@ const authenticate = require('../middleware/auth');
 const {
   createTask,
   getTasks,
+  getTask,
   updateTask,
   deleteTask,
 } = require('../controllers/taskController');
@@ -13,6 +14,7 @@ router.use(authenticate);
 
 router.post('/', createTask);
 router.get('/', getTasks);
+router.get('/:id', getTask);
 router.put('/:id', updateTask);
 router.delete('/:id', deleteTask);
 
