@@ -1,13 +1,18 @@
-const { v4: uuidv4 } = require('uuid');
-const { getDb } = require('../db/database');
-const { hashPassword, verifyPassword, validatePasswordStrength } = require('../utils/password');
+const { v4: uuidv4 } = require("uuid");
+const { getDb } = require("../db/database");
+const {
+  hashPassword,
+  verifyPassword,
+  validatePasswordStrength,
+} = require("../utils/password");
 const {
   signAccessToken,
   signRefreshToken,
   hashToken,
   getRefreshTokenExpiryDate,
-} = require('../utils/jwt');
-const { verifySocialPayload } = require('../utils/socialAuth');
+} = require("../utils/jwt");
+const { verifySocialPayload } = require("../utils/socialAuth");
+const { verifyRefreshToken } = require("../utils/jwt");
 
 function sanitizeUser(user) {
   return {
@@ -27,19 +32,28 @@ function issueTokens(user) {
     email: user.email,
     tv: user.token_version ?? 0,
   });
-  const refreshToken = signRefreshToken({ sub: user.id, type: 'refresh' });
+  const refreshToken = signRefreshToken({ sub: user.id, type: "refresh" });
 
   const db = getDb();
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at)
     VALUES (?, ?, ?, ?)
-  `).run(uuidv4(), user.id, hashToken(refreshToken), getRefreshTokenExpiryDate().toISOString());
+  `,
+  ).run(
+    uuidv4(),
+    user.id,
+    hashToken(refreshToken),
+    getRefreshTokenExpiryDate().toISOString(),
+  );
 
   return { accessToken, refreshToken };
 }
 
 function isValidEmail(email) {
-  return typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  return (
+    typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+  );
 }
 
 async function register(req, res, next) {
@@ -47,7 +61,9 @@ async function register(req, res, next) {
     const { email, password, name } = req.body;
 
     if (!isValidEmail(email)) {
-      return res.status(400).json({ error: 'A valid email address is required' });
+      return res
+        .status(400)
+        .json({ error: "A valid email address is required" });
     }
 
     const passwordError = validatePasswordStrength(password);
@@ -57,26 +73,35 @@ async function register(req, res, next) {
 
     const normalizedEmail = email.trim().toLowerCase();
     const db = getDb();
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(normalizedEmail);
+    const existing = db
+      .prepare("SELECT id FROM users WHERE email = ?")
+      .get(normalizedEmail);
 
     if (existing) {
-      return res.status(409).json({ error: 'An account with this email already exists' });
+      return res
+        .status(409)
+        .json({ error: "An account with this email already exists" });
     }
 
     const userId = uuidv4();
     const passwordHash = await hashPassword(password);
-    const displayName = typeof name === 'string' && name.trim() ? name.trim() : normalizedEmail.split('@')[0];
+    const displayName =
+      typeof name === "string" && name.trim()
+        ? name.trim()
+        : normalizedEmail.split("@")[0];
 
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO users (id, email, password_hash, name, auth_provider)
       VALUES (?, ?, ?, ?, 'local')
-    `).run(userId, normalizedEmail, passwordHash, displayName);
+    `,
+    ).run(userId, normalizedEmail, passwordHash, displayName);
 
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+    const user = db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
     const tokens = issueTokens(user);
 
     return res.status(201).json({
-      message: 'Registration successful',
+      message: "Registration successful",
       user: sanitizeUser(user),
       ...tokens,
     });
@@ -89,23 +114,23 @@ async function login(req, res, next) {
   try {
     const { email, password } = req.body;
 
-    if (!isValidEmail(email) || typeof password !== 'string' || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+    if (!isValidEmail(email) || typeof password !== "string" || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
     }
 
     const db = getDb();
     const user = db
-      .prepare('SELECT * FROM users WHERE email = ? AND auth_provider = ?')
-      .get(email.trim().toLowerCase(), 'local');
+      .prepare("SELECT * FROM users WHERE email = ? AND auth_provider = ?")
+      .get(email.trim().toLowerCase(), "local");
 
     if (!user || !(await verifyPassword(password, user.password_hash))) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({ error: "Invalid email or password" });
     }
 
     const tokens = issueTokens(user);
 
     return res.json({
-      message: 'Login successful',
+      message: "Login successful",
       user: sanitizeUser(user),
       ...tokens,
     });
@@ -116,10 +141,20 @@ async function login(req, res, next) {
 
 async function socialLogin(req, res, next) {
   try {
-    const { provider, idToken, accessToken, email, providerId, name, avatarUrl } = req.body;
+    const {
+      provider,
+      idToken,
+      accessToken,
+      email,
+      providerId,
+      name,
+      avatarUrl,
+    } = req.body;
 
     if (!provider) {
-      return res.status(400).json({ error: 'provider is required (google or github)' });
+      return res
+        .status(400)
+        .json({ error: "provider is required (google or github)" });
     }
 
     const verified = await verifySocialPayload({
@@ -134,57 +169,77 @@ async function socialLogin(req, res, next) {
 
     const db = getDb();
     let user = db
-      .prepare('SELECT * FROM users WHERE auth_provider = ? AND provider_id = ?')
+      .prepare(
+        "SELECT * FROM users WHERE auth_provider = ? AND provider_id = ?",
+      )
       .get(verified.provider, verified.providerId);
 
     if (!user) {
-      const existingByEmail = db.prepare('SELECT * FROM users WHERE email = ?').get(verified.email);
+      const existingByEmail = db
+        .prepare("SELECT * FROM users WHERE email = ?")
+        .get(verified.email);
 
       if (existingByEmail) {
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE users
           SET auth_provider = ?, provider_id = ?, avatar_url = COALESCE(?, avatar_url),
               name = CASE WHEN name = '' THEN ? ELSE name END,
               updated_at = datetime('now')
           WHERE id = ?
-        `).run(verified.provider, verified.providerId, verified.avatarUrl, verified.name, existingByEmail.id);
+        `,
+        ).run(
+          verified.provider,
+          verified.providerId,
+          verified.avatarUrl,
+          verified.name,
+          existingByEmail.id,
+        );
 
-        user = db.prepare('SELECT * FROM users WHERE id = ?').get(existingByEmail.id);
+        user = db
+          .prepare("SELECT * FROM users WHERE id = ?")
+          .get(existingByEmail.id);
       } else {
         const userId = uuidv4();
-        db.prepare(`
+        db.prepare(
+          `
           INSERT INTO users (id, email, name, avatar_url, auth_provider, provider_id)
           VALUES (?, ?, ?, ?, ?, ?)
-        `).run(
+        `,
+        ).run(
           userId,
           verified.email,
           verified.name,
           verified.avatarUrl,
           verified.provider,
-          verified.providerId
+          verified.providerId,
         );
 
-        user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+        user = db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
       }
     } else {
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE users
         SET name = ?, avatar_url = COALESCE(?, avatar_url), updated_at = datetime('now')
         WHERE id = ?
-      `).run(verified.name, verified.avatarUrl, user.id);
+      `,
+      ).run(verified.name, verified.avatarUrl, user.id);
 
-      user = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+      user = db.prepare("SELECT * FROM users WHERE id = ?").get(user.id);
     }
 
     const tokens = issueTokens(user);
 
     return res.json({
-      message: 'Social login successful',
+      message: "Social login successful",
       user: sanitizeUser(user),
       ...tokens,
     });
   } catch (error) {
-    return res.status(401).json({ error: error.message || 'Social login verification failed' });
+    return res
+      .status(401)
+      .json({ error: error.message || "Social login verification failed" });
   }
 }
 
@@ -193,19 +248,89 @@ function logout(req, res, next) {
     const db = getDb();
     const revokedAt = new Date().toISOString();
 
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE refresh_tokens
       SET revoked_at = ?
       WHERE user_id = ? AND revoked_at IS NULL
-    `).run(revokedAt, req.user.id);
+    `,
+    ).run(revokedAt, req.user.id);
 
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE users
       SET token_version = token_version + 1, updated_at = datetime('now')
       WHERE id = ?
-    `).run(req.user.id);
+    `,
+    ).run(req.user.id);
 
-    return res.json({ message: 'Logged out successfully. All access tokens have been invalidated.' });
+    return res.json({
+      message:
+        "Logged out successfully. All access tokens have been invalidated.",
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function refresh(req, res, next) {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken || typeof refreshToken !== "string") {
+      return res.status(400).json({ error: "refreshToken is required" });
+    }
+
+    let decoded;
+    try {
+      decoded = verifyRefreshToken(refreshToken);
+    } catch (error) {
+      return res
+        .status(401)
+        .json({ error: "Invalid or expired refresh token" });
+    }
+
+    const db = getDb();
+    const tokenHash = hashToken(refreshToken);
+
+    const storedToken = db
+      .prepare(
+        `
+        SELECT * FROM refresh_tokens
+        WHERE token_hash = ? AND user_id = ?
+      `,
+      )
+      .get(tokenHash, decoded.sub);
+
+    if (!storedToken || storedToken.revoked_at) {
+      return res.status(401).json({ error: "Refresh token has been revoked" });
+    }
+
+    if (new Date(storedToken.expires_at) < new Date()) {
+      return res.status(401).json({ error: "Refresh token has expired" });
+    }
+
+    const user = db
+      .prepare("SELECT * FROM users WHERE id = ?")
+      .get(decoded.sub);
+
+    if (!user) {
+      return res
+        .status(401)
+        .json({ error: "User associated with token no longer exists" });
+    }
+
+    db.prepare(`UPDATE refresh_tokens SET revoked_at = ? WHERE id = ?`).run(
+      new Date().toISOString(),
+      storedToken.id,
+    );
+
+    const tokens = issueTokens(user);
+
+    return res.json({
+      message: "Token refreshed successfully",
+      ...tokens,
+    });
   } catch (error) {
     return next(error);
   }
@@ -216,4 +341,5 @@ module.exports = {
   login,
   socialLogin,
   logout,
+  refresh,
 };
