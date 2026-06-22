@@ -6,7 +6,7 @@ services:
     image: taskify-apis:latest
     container_name: taskify_apis_container
     ports:
-      - "3000:3000"
+      - "3001:3000"
     volumes:
       - ./data:/app/data
     environment:
